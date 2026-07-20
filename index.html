@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Ledger — Daily Openings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF1F4; --card:#FFFFFF; --ink:#14222D; --muted:#5C6B77;
+    --line:#D7DDE3; --green:#0E6B5C; --green-soft:#E3EFEC; --amber:#E8A13D;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--paper); color:var(--ink); font-family:'Inter',system-ui,sans-serif; font-size:15px; line-height:1.5;}
+  .wrap{max-width:760px; margin:0 auto; padding:0 16px 64px;}
+
+  header{padding:28px 0 10px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--green);}
+  h1{font-family:'Sora',sans-serif; font-size:clamp(26px,6vw,34px); font-weight:700; letter-spacing:-0.02em;}
+  .subtitle{color:var(--muted); font-size:14px; margin-top:2px;}
+
+  /* signature: the day tape — a ledger line of today's totals */
+  .tape{margin:18px 0 20px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; font-family:'IBM Plex Mono',monospace; font-size:13px;}
+  .tape-row{display:flex; align-items:baseline; gap:8px; padding:3px 0;}
+  .tape-row .label{white-space:nowrap; color:var(--muted);}
+  .tape-row .dots{flex:1; border-bottom:1px dotted var(--line); transform:translateY(-4px);}
+  .tape-row .val{white-space:nowrap; font-weight:500;}
+  .tape-row.total .label,.tape-row.total .val{color:var(--green); font-weight:500;}
+
+  .controls{display:flex; flex-direction:column; gap:10px; margin-bottom:18px;}
+  input[type=search]{width:100%; padding:11px 14px; border:1px solid var(--line); border-radius:10px; font:inherit; background:var(--card); color:var(--ink);}
+  input[type=search]:focus{outline:2px solid var(--green); outline-offset:1px; border-color:var(--green);}
+  .chips{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 13px; font-size:13px; cursor:pointer;}
+  .chip[aria-pressed="true"]{background:var(--green); border-color:var(--green); color:#fff;}
+  .chip:focus-visible{outline:2px solid var(--green); outline-offset:2px;}
+
+  .count-line{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); margin-bottom:10px;}
+
+  .job{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px;}
+  .job h2{font-family:'Sora',sans-serif; font-size:17px; font-weight:600; letter-spacing:-0.01em;}
+  .job .org{color:var(--muted); font-size:14px; margin-top:2px;}
+  .meta{display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);}
+  .meta .salary{color:var(--green); font-weight:500;}
+  .badge{display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; background:#FBF1DF; color:#8A5A12; border-radius:6px; padding:2px 7px; margin-left:8px; vertical-align:2px;}
+  .job-foot{display:flex; align-items:center; justify-content:space-between; margin-top:14px;}
+  .src{font-size:12px; color:var(--muted);}
+  .apply{background:var(--green); color:#fff; text-decoration:none; font-weight:600; font-size:14px; padding:9px 18px; border-radius:9px;}
+  .apply:hover{background:#0B584C;}
+  .apply:focus-visible{outline:2px solid var(--ink); outline-offset:2px;}
+
+  .state{background:var(--card); border:1px dashed var(--line); border-radius:12px; padding:28px 20px; text-align:center; color:var(--muted);}
+  .state strong{color:var(--ink); display:block; font-family:'Sora',sans-serif; margin-bottom:6px;}
+
+  @media (prefers-reduced-motion: no-preference){
+    .job{animation:rise .25s ease both;}
+    @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="dateLine">Daily openings</div>
+    <h1>Job Ledger</h1>
+    <div class="subtitle">Fresh postings across the market, refreshed every morning.</div>
+  </header>
+
+  <div class="tape" id="tape" hidden></div>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search title, company, or location" aria-label="Search jobs">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="count-line" id="countLine"></div>
+  <main id="list" aria-live="polite"></main>
+</div>
+
+<script>
+let JOBS = [], activeSource = null;
+const $ = id => document.getElementById(id);
+
+async function load(){
+  try{
+    const res = await fetch('jobs_data.json?v=' + Date.now());
+    if(!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    JOBS = data.jobs || [];
+    $('dateLine').textContent = 'Daily openings · ' + (data.generated || '');
+    buildTape(data.generated);
+    buildChips();
+    render();
+  }catch(e){
+    $('list').innerHTML = '<div class="state"><strong>No data yet</strong>' +
+      'Run the "Daily Job Openings" workflow once in GitHub Actions, then reload this page.</div>';
+  }
+}
+
+function buildTape(date){
+  const bySource = {};
+  JOBS.forEach(j => { const s = j["Source"] || 'Other'; bySource[s]=(bySource[s]||0)+1; });
+  const rows = Object.entries(bySource).sort((a,b)=>b[1]-a[1]).slice(0,5)
+    .map(([s,n]) => tapeRow(s, n));
+  $('tape').innerHTML = tapeRow('Total openings', JOBS.length, true) + rows.join('');
+  $('tape').hidden = JOBS.length === 0;
+}
+function tapeRow(label, val, total){
+  return `<div class="tape-row${total?' total':''}"><span class="label">${esc(label)}</span><span class="dots"></span><span class="val">${val}</span></div>`;
+}
+
+function buildChips(){
+  const sources = [...new Set(JOBS.map(j => j["Source"]).filter(Boolean))].slice(0,8);
+  $('chips').innerHTML = ['All', ...sources].map(s =>
+    `<button class="chip" aria-pressed="${s==='All'}" data-s="${esc(s)}">${esc(s)}</button>`).join('');
+  $('chips').querySelectorAll('.chip').forEach(b => b.onclick = () => {
+    activeSource = b.dataset.s === 'All' ? null : b.dataset.s;
+    $('chips').querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', x===b));
+    render();
+  });
+}
+
+function render(){
+  const q = $('q').value.trim().toLowerCase();
+  const rows = JOBS.filter(j => {
+    if(activeSource && j["Source"] !== activeSource) return false;
+    if(!q) return true;
+    return [j["Job Title"], j["Company"], j["Location"]].join(' ').toLowerCase().includes(q);
+  });
+  $('countLine').textContent = rows.length + ' of ' + JOBS.length + ' openings shown';
+  if(!rows.length){
+    $('list').innerHTML = '<div class="state"><strong>Nothing matches</strong>Clear the search or pick a different source.</div>';
+    return;
+  }
+  const today = new Date().toISOString().slice(0,10);
+  $('list').innerHTML = rows.map(j => `
+    <article class="job">
+      <h2>${esc(j["Job Title"])}${j["Posted"]===today ? '<span class="badge">NEW TODAY</span>':''}</h2>
+      <div class="org">${esc(j["Company"])}${j["Location"] ? ' · ' + esc(j["Location"]) : ''}</div>
+      <div class="meta">
+        ${j["Posted"] ? `<span>posted ${esc(j["Posted"])}</span>` : ''}
+        ${j["Employment Type"] ? `<span>${esc(j["Employment Type"].toLowerCase())}</span>` : ''}
+        ${j["Salary"] ? `<span class="salary">${esc(j["Salary"])}</span>` : ''}
+      </div>
+      <div class="job-foot">
+        <span class="src">${esc(j["Source"] || '')}</span>
+        ${j["Apply Link"] ? `<a class="apply" href="${esc(j["Apply Link"])}" target="_blank" rel="noopener">Apply</a>` : ''}
+      </div>
+    </article>`).join('');
+}
+
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+$('q').addEventListener('input', render);
+load();
+</script>
+</body>
+</html>
