@@ -23,7 +23,7 @@ DATE_POSTED = "today"        # options: all, today, 3days, week, month
 # -----------------------------------------------------
 
 API_KEY = os.environ.get("RAPIDAPI_KEY")
-API_URL = "https://jsearch.p.rapidapi.com/search"
+API_URL = "https://jsearch.p.rapidapi.com/search-v2"
 
 
 def fetch_jobs(query: str) -> list:
