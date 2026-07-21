@@ -41,7 +41,8 @@ def fetch_jobs(query: str) -> list:
         }
         resp = requests.get(API_URL, headers=headers, params=params, timeout=30)
         resp.raise_for_status()
-        data = resp.json().get("data", [])
+        raw_data = resp.json().get("data", [])
+        data = raw_data.get("jobs", []) if isinstance(raw_data, dict) else raw_data
         for j in data:
             jobs.append({
                 "Search": query,
