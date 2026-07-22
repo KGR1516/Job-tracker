@@ -14,9 +14,12 @@ from openpyxl.utils import get_column_letter
 
 # ---------------- CONFIG - EDIT THESE ----------------
 SEARCH_QUERIES = [
-    "SAP FICO Consultant in UAE",
-    "Accountant in Dubai",
-    "Financial Analyst in Sharjah",
+"SAP FICO Consultant in UAE",
+"Accountant in UAE - WITH 2 YEARS",
+"SAP FI CONSULTANT - FRESHERS",
+"SAP FI CONSULTANT - WITH 2 TO THREE YEARS END USER EXPIRIANCE",
+"SAP FI ANALYST IN TOP MNCS",
+"NEW SAP JOBS",
 ]
 PAGES_PER_QUERY = 1          # each page = ~10 jobs
 DATE_POSTED = "today"        # options: all, today, 3days, week, month
